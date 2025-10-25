@@ -114,7 +114,7 @@ local spawnRemote = nil
 pcall(function() spawnRemote = ReplicatedStorage:WaitForChild("Connections"):WaitForChild("Spawn") end)
 
 local Window = Fluent:CreateWindow({
-    Title = "AMD 3200g| Update 19/10/2025 ",
+    Title = "AMD 3200g| Update 25/10/2025 ",
     SubTitle = " Dev Rabbit",
     TabWidth = 150,
     Size = UDim2.fromOffset(500, 550),

@@ -124,7 +124,7 @@ Main= Window:AddTab({ Title = "Main", Icon = "home" }),
     Players = Window:AddTab({ Title = "Player", Icon = "ghost" }),
     Fruits = Window:AddTab({ Title = "Fruit", Icon = "apple" }),
     Map = Window:AddTab({ Title = "Location", Icon = "loader-2" }),
-		Shop = Window:AddTab({ Title = "Settings", Icon = "settings" }),
+		Shop = Window:AddTab({ Title = "Settings", Icon = "" }),
 	Settings = Window:AddTab({ Title = "Settings", Icon = "settings" })
 }
 
@@ -1392,92 +1392,296 @@ Tabs.Main:AddToggle("ShowSamUIFrame", {
     showFrame = Value
     UpdateFrame()
 end)
-States = States or {}
+local States = States or {}
 States.Drink = States.Drink or {}
-local SelectedDrink = "Cider+"
-local remote
 
-local function findRemote()
-    local m = workspace:FindFirstChild("PlayerGui")
-    local b = m and m:FindFirstChild("NPCUI")
-    local c = b and b:FindFirstChild("Clickable")
-    local s = c and c:FindFirstChild("BuyDrinks")
-    local clk = s and s:FindFirstChild("Clicked")
-    return clk and clk:FindFirstChild("Retum")
-end
-task.spawn(function()
-    while not remote do
-        remote = findRemote()
-        task.wait(1)
+local BuyLimitInput = Tabs.Shop:AddInput("BuyLimitInput", {
+    Title = "Số Lần Mua ",
+    Default = "1", -- giá trị mặc định
+    Numeric = true, -- chỉ cho nhập số
+    Placeholder = "Nhập số lần",
+    Callback = function(value)
+        local n = tonumber(value)
+        if n then
+            _G.AutoBuyCiderLimit = n
+        else
+            _G.AutoBuyCiderLimit = 1 -- fallback mặc định
+        end
     end
-end)
+})
 
-local BuyBox = Tabs.Shop:AddInput("BuyDrinkAmount", {
-    Title = "Số lượng",
+-- Toggle Auto Buy Cider
+local buy = Tabs.Shop:AddToggle("AutoBuyCider", {
+    Title = "Auto Buy Cider",
+    Default = false,
+    Callback = function(state)
+        local player = game.Players.LocalPlayer
+        local gui = player:WaitForChild("PlayerGui"):WaitForChild("NPCUI"):WaitForChild("BuyDrinks")
+        local cider = gui:WaitForChild("Cider")
+        gui.Visible = state -- show/hide menu theo toggle
+
+        if state then
+            _G.AutoBuyCiderRunning = true
+            _G.AutoBuyCiderLimit = _G.AutoBuyCiderLimit or 1 -- mặc định 5 lần
+
+            task.spawn(function()
+                local count = 0
+                while _G.AutoBuyCiderRunning and count < _G.AutoBuyCiderLimit do
+                    -- Fire tất cả MouseButton1Click connections
+                    for _, v in pairs(getconnections(cider.MouseButton1Click)) do
+                        v:Fire()
+                    end
+
+                    -- Optional: click bằng VirtualInputManager
+                    local vp = cider:FindFirstChild("ViewportFrame")
+                    if vp then
+                        local VirtualInputManager = game:GetService("VirtualInputManager")
+                        local pos = vp.AbsolutePosition + vp.AbsoluteSize / 2
+                        VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 1)
+                        task.wait(0.05)
+                        VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 1)
+                    end
+
+                    count = count + 1
+                    task.wait(0.1) -- delay giữa các lần click
+                end
+
+                -- Tự động tắt toggle sau khi hoàn tất số lần
+                _G.AutoBuyCiderRunning = false
+                gui.Visible = false
+                buy:Set(false)
+            end)
+        else
+            -- Tắt auto-click nếu toggle bị tắt
+            _G.AutoBuyCiderRunning = false
+            gui.Visible = false
+        end
+    end
+})
+local LemonadeLimitInput = Tabs.Shop:AddInput("LemonadeLimitInput", {
+    Title = "Số Lần Mua Lemonade",
     Default = "1",
-    Placeholder = "số lượng...",
     Numeric = true,
-    Finished = false,
+    Placeholder = "Nhập số lần",
+    Callback = function(value)
+        local n = tonumber(value)
+        if n then
+            _G.AutoBuyLemonadeLimit = n
+        else
+            _G.AutoBuyLemonadeLimit = 1 -- fallback mặc định
+        end
+    end
 })
 
-local DrinkDropdown = Tabs.Shop:AddDropdown("DrinkType", {
-    Title = "Loại nước",
-    Values = {"Cider+", "Lemonade+", "Juice+", "Smoothie+"},
-    Multi = false,
-    Default = 1,
+-- Toggle Auto Buy Lemonade
+local buyLemonade = Tabs.Shop:AddToggle("AutoBuyLemonade", {
+    Title = "Auto Buy Lemonade",
+    Default = false,
+    Callback = function(state)
+        local player = game.Players.LocalPlayer
+        local gui = player:WaitForChild("PlayerGui"):WaitForChild("NPCUI"):WaitForChild("BuyDrinksPlus")
+        local lemonade = gui:WaitForChild("Lemonade")
+        gui.Visible = state -- show/hide menu theo toggle
+
+        if state then
+            _G.AutoBuyLemonadeRunning = true
+            _G.AutoBuyLemonadeLimit = _G.AutoBuyLemonadeLimit or 1 -- mặc định 5 lần
+
+            task.spawn(function()
+                local count = 0
+                while _G.AutoBuyLemonadeRunning and count < _G.AutoBuyLemonadeLimit do
+                    -- Fire tất cả MouseButton1Click connections
+                    for _, v in pairs(getconnections(lemonade.MouseButton1Click)) do
+                        v:Fire()
+                    end
+
+                    -- Click bằng VirtualInputManager (nếu có ViewportFrame)
+                    local vp = lemonade:FindFirstChild("ViewportFrame")
+                    if vp then
+                        local VirtualInputManager = game:GetService("VirtualInputManager")
+                        local pos = vp.AbsolutePosition + vp.AbsoluteSize / 2
+                        VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 1)
+                        task.wait(0.05)
+                        VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 1)
+                    end
+
+                    count = count + 1
+                    task.wait(0.1)
+                end
+
+                -- Tự động tắt toggle sau khi hoàn tất số lần
+                _G.AutoBuyLemonadeRunning = false
+                gui.Visible = false
+                buyLemonade:Set(false)
+            end)
+        else
+            -- Tắt auto-click nếu toggle bị tắt
+            _G.AutoBuyLemonadeRunning = false
+            gui.Visible = false
+        end
+    end
 })
 
-DrinkDropdown:OnChanged(function(Value)
-    SelectedDrink = Value
-end)
-
-local BuyToggle = Tabs.Shop:AddToggle("AutoBuyDrink", {
-    Title = "Tự động Mua nước",
-    Default = false
+-- Thêm ô input để chỉnh số lần mua Smoothie
+local SmoothieLimitInput = Tabs.Shop:AddInput("SmoothieLimitInput", {
+    Title = "Số Lần Mua Smoothie",
+    Default = "1",
+    Numeric = true,
+    Placeholder = "Nhập số lần",
+    Callback = function(value)
+        local n = tonumber(value)
+        if n then
+            _G.AutoBuySmoothieLimit = n
+        else
+            _G.AutoBuySmoothieLimit = 1 -- fallback mặc định
+        end
+    end
 })
 
+-- Toggle Auto Buy Smoothie
+local buySmoothie = Tabs.Shop:AddToggle("AutoBuySmoothie", {
+    Title = "Auto Buy Smoothie",
+    Default = false,
+    Callback = function(state)
+        local player = game.Players.LocalPlayer
+        local gui = player:WaitForChild("PlayerGui"):WaitForChild("NPCUI"):WaitForChild("BuyDrinksPlus")
+        local smoothie = gui:WaitForChild("Smoothie")
+        gui.Visible = state -- show/hide menu theo toggle
+
+        if state then
+            _G.AutoBuySmoothieRunning = true
+            _G.AutoBuySmoothieLimit = _G.AutoBuySmoothieLimit or 1 -- mặc định 5 lần
+
+            task.spawn(function()
+                local count = 0
+                while _G.AutoBuySmoothieRunning and count < _G.AutoBuySmoothieLimit do
+                    -- Fire tất cả MouseButton1Click connections
+                    for _, v in pairs(getconnections(smoothie.MouseButton1Click)) do
+                        v:Fire()
+                    end
+
+                    -- Click bằng VirtualInputManager (nếu có ViewportFrame)
+                    local vp = smoothie:FindFirstChild("ViewportFrame")
+                    if vp then
+                        local VirtualInputManager = game:GetService("VirtualInputManager")
+                        local pos = vp.AbsolutePosition + vp.AbsoluteSize / 2
+                        VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 1)
+                        task.wait(0.05)
+                        VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 1)
+                    end
+
+                    count = count + 1
+                    task.wait(0.1)
+                end
+
+                -- Tự động tắt toggle sau khi hoàn tất số lần
+                _G.AutoBuySmoothieRunning = false
+                gui.Visible = false
+                buySmoothie:Set(false)
+            end)
+        else
+            -- Tắt auto-click nếu toggle bị tắt
+            _G.AutoBuySmoothieRunning = false
+            gui.Visible = false
+        end
+    end
+})
+-- Thêm ô input để chỉnh số lần mua Juice
+local JuiceLimitInput = Tabs.Shop:AddInput("JuiceLimitInput", {
+    Title = "Số Lần Mua Juice",
+    Default = "1",
+    Numeric = true,
+    Placeholder = "Nhập số lần",
+    Callback = function(value)
+        local n = tonumber(value)
+        if n then
+            _G.AutoBuyJuiceLimit = n
+        else
+            _G.AutoBuyJuiceLimit = 1 -- fallback mặc định
+        end
+    end
+})
+
+-- Toggle Auto Buy Juice
+local buyJuice = Tabs.Shop:AddToggle("AutoBuyJuice", {
+    Title = "Auto Buy Juice",
+    Default = false,
+    Callback = function(state)
+        local player = game.Players.LocalPlayer
+        local gui = player:WaitForChild("PlayerGui"):WaitForChild("NPCUI"):WaitForChild("BuyDrinksPlus")
+        local juice = gui:WaitForChild("Juice")
+        gui.Visible = state -- show/hide menu theo toggle
+
+        if state then
+            _G.AutoBuyJuiceRunning = true
+            _G.AutoBuyJuiceLimit = _G.AutoBuyJuiceLimit or 1 -- mặc định 5 lần
+
+            task.spawn(function()
+                local count = 0
+                while _G.AutoBuyJuiceRunning and count < _G.AutoBuyJuiceLimit do
+                    -- Fire tất cả MouseButton1Click connections
+                    for _, v in pairs(getconnections(juice.MouseButton1Click)) do
+                        v:Fire()
+                    end
+
+                    -- Click bằng VirtualInputManager (nếu có ViewportFrame)
+                    local vp = juice:FindFirstChild("ViewportFrame")
+                    if vp then
+                        local VirtualInputManager = game:GetService("VirtualInputManager")
+                        local pos = vp.AbsolutePosition + vp.AbsoluteSize / 2
+                        VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, true, game, 1)
+                        task.wait(0.05)
+                        VirtualInputManager:SendMouseButtonEvent(pos.X, pos.Y, 0, false, game, 1)
+                    end
+
+                    count = count + 1
+                    task.wait(0.1)
+                end
+
+                -- Tự động tắt toggle sau khi hoàn tất số lần
+                _G.AutoBuyJuiceRunning = false
+                gui.Visible = false
+                buyJuice:Set(false)
+            end)
+        else
+            -- Tắt auto-click nếu toggle bị tắt
+            _G.AutoBuyJuiceRunning = false
+            gui.Visible = false
+        end
+    end
+})
 
 States = States or {}
 States.Drink = States.Drink or {}
+
 local AllowedDrinks = {
     ["Cider+"] = true,
     ["Lemonade+"] = true,
     ["Juice+"] = true,
     ["Smoothie+"] = true,
-
-	 ["Apple Juice"] = true,
-    ["Sour Juice"] = true,
-    ["Coconut Milk"] = true,
-    ["Fruit Juice"] = true,
-	 ["Pumpkin Juice"] = true,
-	 ["Banana Juice"] = true,
-	  ["Pear Juice"] = true,
-	  
-
-
 }
 
 local DropAmount = 1
+local LocalPlayer = game.Players.LocalPlayer
+local VIM = game:GetService("VirtualInputManager")
 
+-- Input Số lượng thả
 local DropBox = Tabs.Shop:AddInput("DropDrinkAmount", {
     Title = "Số lượng thả",
     Default = "1",
     Placeholder = "Nhập số lượng...",
-    Numeric = true,
-    Finished = false,
+    Numeric = true
 })
 
 DropBox:OnChanged(function(Value)
     local num = tonumber(Value)
-    if num and num > 0 then
-        DropAmount = num
-    else
-        DropAmount = 1
-    end
+    DropAmount = (num and num > 0) and num or 1
 end)
+
+-- Toggle AutoDrop
 local DropToggle = Tabs.Shop:AddToggle("AutoDropDrink", {
-	Description = "All nước",
-    Title = "Thả Nước",
+    Description = "Thả nước liên tục",
+    Title = "Auto Drop Nước",
     Default = false
 })
 
@@ -1485,39 +1689,47 @@ DropToggle:OnChanged(function(Value)
     States.Drink.AutoDrop = Value
     if Value then
         task.spawn(function()
-            autoDropOnce()
-            States.Drink.AutoDrop = false -- tắt toggle sau khi xong
+            autoDropContinuous()
         end)
     end
 end)
 
-function autoDropOnce()
-    local backpack, char = LocalPlayer.Backpack, LocalPlayer.Character
-    if not (backpack and char) then return end
+function autoDropContinuous()
+    while States.Drink.AutoDrop do
+        local backpack, char = LocalPlayer.Backpack, LocalPlayer.Character
+        if not (backpack and char and char:FindFirstChild("Humanoid")) then
+            task.wait(0.5)
+        else
+            local dropped = 0
+            for _, tool in ipairs(backpack:GetChildren()) do
+                if dropped >= DropAmount then break end
+                if tool:IsA("Tool") and AllowedDrinks[tool.Name] then
+                    char.Humanoid:EquipTool(tool)
 
-    local dropped = 0
-    for _, tool in ipairs(backpack:GetChildren()) do
-        if dropped >= DropAmount then break end
-        if tool:IsA("Tool") and AllowedDrinks[tool.Name] then
-            char.Humanoid:EquipTool(tool)
-            task.wait(0.001)
-            if tool.Parent == char then
-                VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
-                task.wait(0.001)
-                VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
-                dropped += 1
-                task.wait(0.001)
+                    local startTime = tick()
+                    while tool.Parent ~= char and tick() - startTime < 1 do
+                        task.wait(0.01)
+                    end
+
+                    while tool.Parent == char and States.Drink.AutoDrop do
+                        VIM:SendKeyEvent(true, Enum.KeyCode.Backspace, false, game)
+                        task.wait(0.01)
+                        VIM:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
+                        task.wait(0.01)
+                    end
+                    dropped += 1
+                end
             end
         end
+        task.wait(0.05)
     end
 end
-States.Drink = States.Drink or {}
-getgenv().DRINK_DELAY = 0.001
 
-local DrinkToggle = Tabs.Shop:AddToggle("AutoDrink",
- {
-	 Description = "All nước",
-    Title = "Tự động uống nước",
+-- Toggle AutoDrink
+getgenv().DRINK_DELAY = 0.1 -- delay giữa mỗi lần uống
+local DrinkToggle = Tabs.Shop:AddToggle("AutoDrink", {
+    Description = "Tự động uống nước",
+    Title = "Auto Drink",
     Default = false
 })
 
@@ -1536,7 +1748,7 @@ function autoDrinkLoop()
                 if not States.Drink.AutoDrink then break end
                 if tool:IsA("Tool") and AllowedDrinks[tool.Name] then
                     char.Humanoid:EquipTool(tool)
-                    task.wait(0.001)
+                    task.wait(0.05)
                     if tool.Parent == char then
                         tool:Activate()
                         task.wait(getgenv().DRINK_DELAY)
@@ -1544,29 +1756,9 @@ function autoDrinkLoop()
                 end
             end
         end
-        task.wait(0.001)
+        task.wait(0.1)
     end
 end
-BuyToggle:OnChanged(function(Value)
-    States.Drink.AutoBuy = Value
-
-    if Value and remote then
-        task.spawn(function()
-            local num = tonumber(BuyBox.Value) or 1
-            for i = 1, num do
-                if not States.Drink.AutoBuy then break end
-                pcall(function()
-                    remote:FireServer(SelectedDrink)
-                end)
-                task.wait(0.001)
-            end
-            States.Drink.AutoBuy = false
-            BuyToggle:SetValue(false)
-        end)
-    end
-end)
-
-
 
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)

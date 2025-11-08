@@ -1416,7 +1416,7 @@ local buy = Tabs.Shop:AddToggle("AutoBuyCider", {
     Default = false,
     Callback = function(state)
         local player = game.Players.LocalPlayer
-        local gui = player:WaitForChild("PlayerGui"):WaitForChild("NPCUI"):WaitForChild("BuyDrinks")
+        local gui = player:WaitForChild("PlayerGui"):WaitForChild("NPCUI"):WaitForChild("BuyDrinksPlus")
         local cider = gui:WaitForChild("Cider")
         gui.Visible = state -- show/hide menu theo toggle
 
@@ -1759,6 +1759,142 @@ function autoDrinkLoop()
         task.wait(0.1)
     end
 end
+--// SERVICES
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local VirtualUser = game:GetService("VirtualUser")
+
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+--// CÀI ĐẶT
+local CHECK_INTERVAL = 0.5 -- kiểm tra mỗi 0.5s
+local CLICK_INTERVAL = 0.08 -- khoảng giữa các click (tùy chỉnh)
+local TELEPORT_STEPS = 10 -- số bước di chuyển khi teleport
+local TELEPORT_DELAY = 0.03 -- delay giữa mỗi bước teleport
+
+--// TRẠNG THÁI CLICK
+local isClicking = false
+local AutoFindSamEnabled = false -- trạng thái toggle
+
+--// HÀM LẤY COMPASS VÀ TARGETPOS
+local function getCompassTarget()
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if backpack then
+        for _, item in pairs(backpack:GetChildren()) do
+            if item and item.Name == "Compass" then
+                local targetValue = item:FindFirstChild("TargetPos")
+                if targetValue and targetValue:IsA("Vector3Value") then
+                    return item, targetValue.Value
+                end
+            end
+        end
+    end
+
+    if Character then
+        for _, item in pairs(Character:GetChildren()) do
+            if item and item.Name == "Compass" then
+                local targetValue = item:FindFirstChild("TargetPos")
+                if targetValue and targetValue:IsA("Vector3Value") then
+                    return item, targetValue.Value
+                end
+            end
+        end
+    end
+
+    return nil, nil
+end
+
+--// HÀM TELEPORT TỪ DƯỚI LÊN
+local function safeTeleport(targetPos)
+    if not HumanoidRootPart then return end
+
+    local currentPos = HumanoidRootPart.Position
+    local increment = (targetPos - currentPos) / TELEPORT_STEPS
+
+    for i = 1, TELEPORT_STEPS do
+        pcall(function()
+            HumanoidRootPart.CFrame = CFrame.new(currentPos + increment * i)
+        end)
+        wait(TELEPORT_DELAY)
+    end
+end
+
+--// HÀM CLICK bằng VirtualUser
+local function startAutoClicking(stopCheckFunc)
+    if isClicking then return end
+    isClicking = true
+
+    spawn(function()
+        while isClicking do
+            if not AutoFindSamEnabled then break end
+
+            local ok, shouldContinue = pcall(function() return stopCheckFunc() end)
+            if not ok or not shouldContinue then break end
+
+            pcall(function()
+                VirtualUser:ClickButton1(Vector2.new(0,0))
+            end)
+
+            wait(CLICK_INTERVAL)
+        end
+        isClicking = false
+    end)
+end
+
+local function stopAutoClicking()
+    isClicking = false
+end
+
+--// CẬP NHẬT CHARACTER KHI RESPAWN
+local function refreshCharacter()
+    Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+    HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+end
+LocalPlayer.CharacterAdded:Connect(function()
+    wait(0.1)
+    refreshCharacter()
+end)
+
+--// TOGGLE GUI
+local AutoFindSam = Tabs.Main:AddToggle("AutoSam", { 
+    Title = "Auto Find Sam", 
+    Default = false
+})
+
+AutoFindSam:OnChanged(function(value)
+    AutoFindSamEnabled = value
+    if not value then
+        stopAutoClicking()
+    end
+end)
+
+--// LOOP CHÍNH (teleport + equip + auto click)
+RunService.Heartbeat:Connect(function()
+    if not AutoFindSamEnabled then return end
+
+    local compass, targetPos = getCompassTarget()
+    if compass and targetPos then
+        -- Trang bị Compass
+        pcall(function()
+            local humanoid = Character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:EquipTool(compass)
+            end
+        end)
+
+        -- Teleport từ dưới lên
+        safeTeleport(targetPos + Vector3.new(0,1,0)) -- offset +1 để tránh dính đất
+
+        -- Bắt đầu auto click
+        startAutoClicking(function()
+            return (compass and compass.Parent and (compass.Parent:IsDescendantOf(LocalPlayer) or compass.Parent.Name == "Backpack"))
+        end)
+    else
+        stopAutoClicking()
+    end
+end)
 
 SaveManager:SetLibrary(Fluent)
 InterfaceManager:SetLibrary(Fluent)
